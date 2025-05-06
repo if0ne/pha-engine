@@ -27,19 +27,24 @@ impl<T> ErasedReadStream for InputMemoryStream<'_, '_, T> {
     type Error = GameIoError;
 
     fn read_any(&mut self, v: &mut [u8]) -> Result<(), Self::Error> {
-        if self.head < (self.buffer.len() + v.len()) * 8 {
-            if self.head % 8 == 0 {
-                v.copy_from_slice(&self.buffer[(self.head / 8)..(self.head / 8 + v.len())]);
-                self.head += v.len() * 8;
-                return Ok(());
-            } else {
-                return self.read_any_bits(v, v.len() * 8);
-            }
-        }
+        let new_head = self.head.checked_add(v.len() * 8).ok_or_else(|| {
+            GameIoError::UnexpectedEof(v.len() * 8, self.buffer.len() * 8 - self.head)
+        })?;
 
-        Err(GameIoError::UnexpectedEof(
-            v.len(),
-            self.buffer.len() - self.head,
-        ))
+        if self.head < new_head {
+            if self.head % 8 == 0 {
+                let begin = self.head >> 3;
+                v.copy_from_slice(&self.buffer[begin..(begin + v.len())]);
+                self.head = new_head;
+                Ok(())
+            } else {
+                self.read_any_bits(v, v.len() * 8)
+            }
+        } else {
+            Err(GameIoError::UnexpectedEof(
+                v.len() * 8,
+                self.buffer.len() * 8 - self.head,
+            ))
+        }
     }
 }

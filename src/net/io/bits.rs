@@ -6,12 +6,14 @@ impl<'ctx, 'buffer, T> ErasedWriteBitStream for OutputMemoryStream<'ctx, 'buffer
     type Error = GameIoError;
 
     fn write_byte_bits(&mut self, v: u8, bits: usize) -> Result<(), Self::Error> {
-        let next_bit_head = self.head + bits;
+        let new_head = self.head + bits;
+        let byte_diff = new_head >> 3 - self.buffer.len();
+
         self.buffer
-            .try_reserve(bits / 8 + (bits % 8 == 0) as usize)
+            .try_reserve(byte_diff)
             .map_err(|_| GameIoError::Oom)?;
 
-        if self.buffer.len() * 8 - self.head < bits {
+        if byte_diff > 0 {
             self.buffer.push(0);
         }
 
@@ -25,7 +27,7 @@ impl<'ctx, 'buffer, T> ErasedWriteBitStream for OutputMemoryStream<'ctx, 'buffer
             self.buffer[byte_offset + 1] = v >> bits_free_this_byte;
         }
 
-        self.head = next_bit_head;
+        self.head = new_head;
 
         Ok(())
     }
@@ -61,7 +63,7 @@ impl<'ctx, 'buffer, T> ErasedReadBitStream for InputMemoryStream<'ctx, 'buffer, 
             out |= self.buffer[byte_offset + 1] << bits_free_this_byte;
         }
 
-        out &= !0x00FFu32.wrapping_shl(bits as u32) as u8;
+        out &= !0x00FFu64.wrapping_shl(bits as u32) as u8;
 
         self.head += bits;
 
