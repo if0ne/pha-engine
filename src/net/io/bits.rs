@@ -135,7 +135,7 @@ impl<'ctx, 'buffer, T> ReadBitStream for InputMemoryStream<'ctx, 'buffer, T> {
             out |= self.buffer[byte_offset + 1] << bits_free_this_byte;
         }
 
-        out &= !(0x00FFu8.wrapping_shl(bits as u32));
+        out &= !0x00FFu32.wrapping_shl(bits as u32) as u8;
 
         self.head += bits;
 

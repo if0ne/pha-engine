@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::{fmt::Debug, net::TcpStream};
 
 use io::bits::{BitWritable, ReadBitStream};
-use io::bytes::{ReadStream, Readable, Writable};
+use io::bytes::{Readable, Writable};
 use linking_context::LinkingContext;
 use net::io::GameIoError;
 use net::io::{InputMemoryStream, OutputMemoryStream};
@@ -83,7 +83,7 @@ impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for RoboCat {
 }
 
 fn main() {
-    /*let ctx = Arc::new(Mutex::new(LinkingContext::default()));
+    let ctx = Arc::new(Mutex::new(LinkingContext::default()));
 
     let home: Arc<dyn GameObject> = Arc::new(Home {
         name: "My Home".to_string(),
@@ -128,22 +128,5 @@ fn main() {
 
     let cat = RoboCat::read(&mut input).unwrap();
 
-    dbg!(cat);*/
-
-    let mut ctx = LinkingContext::default();
-    let mut buffer = vec![];
-
-    {
-        let mut out = OutputMemoryStream::new(&mut buffer, &mut ctx);
-        10u32.write_bits(&mut out, 5).unwrap();
-        3u32.write_bits(&mut out, 5).unwrap();
-        42u32.write(&mut out).unwrap();
-    }
-
-    {
-        let mut inp = InputMemoryStream::new(&mut buffer, &mut ctx);
-        dbg!(inp.read_u32_bits(5).unwrap());
-        dbg!(inp.read_u32_bits(5).unwrap());
-        dbg!(inp.read_u32().unwrap());
-    }
+    dbg!(cat);
 }

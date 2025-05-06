@@ -18,7 +18,7 @@ impl<'ctx, 'buffer, T> ErasedWriteStream for OutputMemoryStream<'ctx, 'buffer, T
 
             Ok(())
         } else {
-            self.write_any_bits(v, 8)
+            self.write_any_bits(v, v.len() * 8)
         }
     }
 }
@@ -77,7 +77,7 @@ impl<'ctx, 'buffer, T> WriteStream for OutputMemoryStream<'ctx, 'buffer, T> {
     }
 }
 
-impl<'ctx, 'buffer, T> ErasedReadStream for InputMemoryStream<'ctx, 'buffer, T> {
+impl<T> ErasedReadStream for InputMemoryStream<'_, '_, T> {
     type Error = GameIoError;
 
     fn read_any(&mut self, v: &mut [u8]) -> Result<(), Self::Error> {
@@ -87,18 +87,18 @@ impl<'ctx, 'buffer, T> ErasedReadStream for InputMemoryStream<'ctx, 'buffer, T> 
                 self.head += v.len() * 8;
                 return Ok(());
             } else {
-                return self.read_any_bits(v, 8);
+                return self.read_any_bits(v, v.len() * 8);
             }
         }
 
-        return Err(GameIoError::UnexpectedEof(
+        Err(GameIoError::UnexpectedEof(
             v.len(),
             self.buffer.len() - self.head,
-        ));
+        ))
     }
 }
 
-impl<'ctx, 'buffer, T> ReadStream for InputMemoryStream<'ctx, 'buffer, T> {
+impl<T> ReadStream for InputMemoryStream<'_, '_, T> {
     fn read_bool(&mut self) -> Result<bool, Self::Error> {
         let mut v = [0u8; size_of::<bool>()];
         self.read_any(&mut v)?;
