@@ -1,6 +1,6 @@
-mod game_io;
 mod io;
 mod linking_context;
+mod net;
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -8,9 +8,11 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex, Weak};
 use std::{fmt::Debug, net::TcpStream};
 
-use game_io::{GameIoError, InputMemoryStream, OutputMemoryStream};
+use io::bits::{BitWritable, ReadBitStream};
 use io::bytes::{ReadStream, Readable, Writable};
 use linking_context::LinkingContext;
+use net::io::GameIoError;
+use net::io::{InputMemoryStream, OutputMemoryStream};
 
 pub trait GameObject: Sync + Send + Debug {}
 
@@ -58,8 +60,8 @@ impl Writable<OutputMemoryStream<'_, '_, LinkingContext>> for RoboCat {
         &self,
         stream: &mut OutputMemoryStream<'_, '_, LinkingContext>,
     ) -> Result<(), GameIoError> {
-        self.health.write(stream)?;
-        self.meow_count.write(stream)?;
+        self.health.write_bits(stream, 8)?;
+        self.meow_count.write_bits(stream, 8)?;
         self.mice_indices.write(stream)?;
         self.name.write(stream)?;
         self.home.write(stream)?;
@@ -71,8 +73,8 @@ impl Writable<OutputMemoryStream<'_, '_, LinkingContext>> for RoboCat {
 impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for RoboCat {
     fn read(stream: &mut InputMemoryStream<'_, '_, LinkingContext>) -> Result<Self, GameIoError> {
         Ok(Self {
-            health: stream.read_u32()?,
-            meow_count: stream.read_u32()?,
+            health: stream.read_u32_bits(8)?,
+            meow_count: stream.read_u32_bits(8)?,
             mice_indices: Vec::<u32>::read(stream)?,
             name: String::read(stream)?,
             home: Option::<Weak<dyn GameObject>>::read(stream)?,
@@ -81,7 +83,7 @@ impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for RoboCat {
 }
 
 fn main() {
-    let ctx = Arc::new(Mutex::new(LinkingContext::default()));
+    /*let ctx = Arc::new(Mutex::new(LinkingContext::default()));
 
     let home: Arc<dyn GameObject> = Arc::new(Home {
         name: "My Home".to_string(),
@@ -126,5 +128,22 @@ fn main() {
 
     let cat = RoboCat::read(&mut input).unwrap();
 
-    dbg!(cat);
+    dbg!(cat);*/
+
+    let mut ctx = LinkingContext::default();
+    let mut buffer = vec![];
+
+    {
+        let mut out = OutputMemoryStream::new(&mut buffer, &mut ctx);
+        10u32.write_bits(&mut out, 5).unwrap();
+        3u32.write_bits(&mut out, 5).unwrap();
+        42u32.write(&mut out).unwrap();
+    }
+
+    {
+        let mut inp = InputMemoryStream::new(&mut buffer, &mut ctx);
+        dbg!(inp.read_u32_bits(5).unwrap());
+        dbg!(inp.read_u32_bits(5).unwrap());
+        dbg!(inp.read_u32().unwrap());
+    }
 }

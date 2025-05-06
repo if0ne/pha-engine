@@ -1,60 +1,25 @@
-use std::string::FromUtf8Error;
+use crate::io::{
+    bits::{ErasedReadBitStream, ErasedWriteBitStream},
+    bytes::{ErasedReadStream, ErasedWriteStream, ReadStream, WriteStream},
+};
 
-use crate::io::bytes::{ErasedReadStream, ErasedWriteStream, ReadStream, WriteStream};
-
-#[derive(Debug, Clone)]
-pub enum GameIoError {
-    Utf8Error(FromUtf8Error),
-    UnregisteredGameObject,
-    UnexpectedEof(usize, usize),
-    Oom,
-}
-
-impl From<FromUtf8Error> for GameIoError {
-    fn from(value: FromUtf8Error) -> Self {
-        Self::Utf8Error(value)
-    }
-}
-
-pub struct OutputMemoryStream<'ctx, 'buffer, T> {
-    pub ctx: &'ctx mut T,
-
-    buffer: &'buffer mut Vec<u8>,
-}
-
-impl<'ctx, 'buffer, T> OutputMemoryStream<'ctx, 'buffer, T> {
-    pub fn new(buffer: &'buffer mut Vec<u8>, ctx: &'ctx mut T) -> Self {
-        Self { buffer, ctx }
-    }
-}
-
-pub struct InputMemoryStream<'ctx, 'buffer, T> {
-    pub ctx: &'ctx T,
-
-    buffer: &'buffer [u8],
-    head: usize,
-}
-
-impl<'ctx, 'buffer, T> InputMemoryStream<'ctx, 'buffer, T> {
-    pub fn new(buffer: &'buffer [u8], ctx: &'ctx mut T) -> Self {
-        Self {
-            buffer,
-            head: 0,
-            ctx,
-        }
-    }
-}
+use super::{GameIoError, InputMemoryStream, OutputMemoryStream};
 
 impl<'ctx, 'buffer, T> ErasedWriteStream for OutputMemoryStream<'ctx, 'buffer, T> {
     type Error = GameIoError;
 
     fn write_any(&mut self, v: &[u8]) -> Result<(), Self::Error> {
-        self.buffer
-            .try_reserve(v.len())
-            .map_err(|_| GameIoError::Oom)?;
-        self.buffer.extend_from_slice(v);
+        if self.head % 8 == 0 {
+            self.buffer
+                .try_reserve(v.len())
+                .map_err(|_| GameIoError::Oom)?;
+            self.buffer.extend_from_slice(v);
+            self.head += v.len() * 8;
 
-        Ok(())
+            Ok(())
+        } else {
+            self.write_any_bits(v, 8)
+        }
     }
 }
 
@@ -116,10 +81,14 @@ impl<'ctx, 'buffer, T> ErasedReadStream for InputMemoryStream<'ctx, 'buffer, T> 
     type Error = GameIoError;
 
     fn read_any(&mut self, v: &mut [u8]) -> Result<(), Self::Error> {
-        if self.head < self.buffer.len() + v.len() {
-            v.copy_from_slice(&self.buffer[self.head..(self.head + v.len())]);
-            self.head += v.len();
-            return Ok(());
+        if self.head < (self.buffer.len() + v.len()) * 8 {
+            if self.head % 8 == 0 {
+                v.copy_from_slice(&self.buffer[(self.head / 8)..(self.head / 8 + v.len())]);
+                self.head += v.len() * 8;
+                return Ok(());
+            } else {
+                return self.read_any_bits(v, 8);
+            }
         }
 
         return Err(GameIoError::UnexpectedEof(

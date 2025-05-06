@@ -5,8 +5,8 @@ use std::{
 
 use crate::{
     GameObject,
-    game_io::{GameIoError, InputMemoryStream, OutputMemoryStream},
     io::bytes::{ReadStream, Readable, Writable, WriteStream},
+    net::io::{GameIoError, InputMemoryStream, OutputMemoryStream},
 };
 
 #[derive(Debug, Default)]

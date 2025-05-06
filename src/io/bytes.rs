@@ -307,7 +307,6 @@ impl<R: ReadStream, T: Readable<R>> Readable<R> for Option<T> {
 impl<R: ReadStream, T: Readable<R>> Readable<R> for Vec<T> {
     fn read(stream: &mut R) -> Result<Self, R::Error> {
         let len = stream.read_usize()?;
-        dbg!(len);
         let mut vec = Vec::with_capacity(len);
         for _ in 0..len {
             vec.push(T::read(stream)?);
