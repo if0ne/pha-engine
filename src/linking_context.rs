@@ -7,6 +7,7 @@ use crate::{
     GameObject,
     io::bytes::{ReadStream, Readable, Writable, WriteStream},
     net::io::{GameIoError, InputMemoryStream, OutputMemoryStream},
+    reflect::{Reflect, Ty},
 };
 
 #[derive(Debug, Default)]
@@ -111,5 +112,59 @@ impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for Option<Weak<dyn Gam
             .ok_or(GameIoError::UnregisteredGameObject)?;
 
         Ok(Some(Arc::downgrade(&go)))
+    }
+}
+
+impl<T> Writable<OutputMemoryStream<'_, '_, LinkingContext>> for T
+where
+    T: Reflect,
+{
+    fn write_byte(
+        &self,
+        stream: &mut OutputMemoryStream<'_, '_, LinkingContext>,
+    ) -> Result<(), GameIoError> {
+        unsafe {
+            let this = self as *const T as *const u8;
+
+            for field in self.reflect().fields {
+                match field.ty {
+                    Ty::Int => u32::write_byte(&*(this.add(field.offset) as *const u32), stream)?,
+                    Ty::String => {
+                        String::write_byte(&*(this.add(field.offset) as *const String), stream)?
+                    }
+                    Ty::Float => f32::write_byte(&*(this.add(field.offset) as *const f32), stream)?,
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl<T> Readable<InputMemoryStream<'_, '_, LinkingContext>> for T
+where
+    T: Reflect + Default,
+{
+    fn read_byte(
+        stream: &mut InputMemoryStream<'_, '_, LinkingContext>,
+    ) -> Result<Self, GameIoError> {
+        unsafe {
+            let mut ret = T::default();
+            let this = &mut ret as *mut T as *mut u8;
+
+            for field in ret.reflect().fields {
+                match field.ty {
+                    Ty::Int => {
+                        *(this.add(field.offset) as *mut u32) = u32::read_byte(stream)?;
+                    }
+                    Ty::String => {
+                        *(this.add(field.offset) as *mut String) = String::read_byte(stream)?
+                    }
+                    Ty::Float => *(this.add(field.offset) as *mut f32) = f32::read_byte(stream)?,
+                }
+            }
+
+            Ok(ret)
+        }
     }
 }

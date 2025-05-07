@@ -3,19 +3,20 @@
 mod io;
 mod linking_context;
 mod net;
+mod reflect;
 mod utils;
 
 use std::io::{Read, Write};
+use std::mem::offset_of;
 use std::net::TcpListener;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex, Weak};
 use std::{fmt::Debug, net::TcpStream};
 
-use io::bits::{BitWritable, ReadBitStream};
 use io::bytes::{Readable, Writable};
 use linking_context::LinkingContext;
-use net::io::GameIoError;
 use net::io::{InputMemoryStream, OutputMemoryStream};
+use reflect::{MemberField, Reflect, Ty, UserDefinedType};
 
 pub trait GameObject: Sync + Send + Debug {}
 
@@ -58,32 +59,15 @@ impl Default for RoboCat {
     }
 }
 
-impl Writable<OutputMemoryStream<'_, '_, LinkingContext>> for RoboCat {
-    fn write_byte(
-        &self,
-        stream: &mut OutputMemoryStream<'_, '_, LinkingContext>,
-    ) -> Result<(), GameIoError> {
-        self.health.write_bits(stream, 8)?;
-        self.meow_count.write_bits(stream, 8)?;
-        self.mice_indices.write_byte(stream)?;
-        self.name.write_byte(stream)?;
-        self.home.write_byte(stream)?;
+impl Reflect for RoboCat {
+    fn reflect(&self) -> &'static reflect::UserDefinedType {
+        const INFO: &'static UserDefinedType = &UserDefinedType::new(&[
+            MemberField::new("health", Ty::Int, offset_of!(RoboCat, health)),
+            MemberField::new("meow_count", Ty::Int, offset_of!(RoboCat, meow_count)),
+            MemberField::new("name", Ty::String, offset_of!(RoboCat, name)),
+        ]);
 
-        Ok(())
-    }
-}
-
-impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for RoboCat {
-    fn read_byte(
-        stream: &mut InputMemoryStream<'_, '_, LinkingContext>,
-    ) -> Result<Self, GameIoError> {
-        Ok(Self {
-            health: stream.read_u32_bits(8)?,
-            meow_count: stream.read_u32_bits(8)?,
-            mice_indices: <_>::read_byte(stream)?,
-            name: <_>::read_byte(stream)?,
-            home: <_>::read_byte(stream)?,
-        })
+        INFO
     }
 }
 
