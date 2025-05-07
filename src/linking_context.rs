@@ -61,16 +61,16 @@ impl LinkingContext {
 }
 
 impl Writable<OutputMemoryStream<'_, '_, LinkingContext>> for Option<Weak<dyn GameObject>> {
-    fn write(
+    fn write_byte(
         &self,
         stream: &mut OutputMemoryStream<'_, '_, LinkingContext>,
     ) -> Result<(), GameIoError> {
-        self.as_ref().and_then(|x| x.upgrade()).write(stream)
+        self.as_ref().and_then(|x| x.upgrade()).write_byte(stream)
     }
 }
 
 impl Writable<OutputMemoryStream<'_, '_, LinkingContext>> for Arc<dyn GameObject> {
-    fn write(
+    fn write_byte(
         &self,
         stream: &mut OutputMemoryStream<'_, '_, LinkingContext>,
     ) -> Result<(), GameIoError> {
@@ -85,7 +85,9 @@ impl Writable<OutputMemoryStream<'_, '_, LinkingContext>> for Arc<dyn GameObject
 }
 
 impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for Arc<dyn GameObject> {
-    fn read(stream: &mut InputMemoryStream<'_, '_, LinkingContext>) -> Result<Self, GameIoError> {
+    fn read_byte(
+        stream: &mut InputMemoryStream<'_, '_, LinkingContext>,
+    ) -> Result<Self, GameIoError> {
         let go = stream
             .ctx
             .get_game_object(stream.read_usize()?)
@@ -96,7 +98,9 @@ impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for Arc<dyn GameObject>
 }
 
 impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for Option<Weak<dyn GameObject>> {
-    fn read(stream: &mut InputMemoryStream<'_, '_, LinkingContext>) -> Result<Self, GameIoError> {
+    fn read_byte(
+        stream: &mut InputMemoryStream<'_, '_, LinkingContext>,
+    ) -> Result<Self, GameIoError> {
         if !stream.read_bool()? {
             return Ok(None);
         }

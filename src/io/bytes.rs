@@ -1,4 +1,4 @@
-use std::string::FromUtf8Error;
+use std::{mem::MaybeUninit, string::FromUtf8Error};
 
 pub trait ErasedWriteStream {
     type Error;
@@ -53,15 +53,15 @@ pub trait ReadStream: ErasedReadStream {
 }
 
 pub trait Readable<R: ReadStream>: Sized {
-    fn read(stream: &mut R) -> Result<Self, R::Error>;
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error>;
 }
 
 pub trait Writable<W: WriteStream> {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error>;
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error>;
 }
 
 impl<W: WriteStream> Writable<W> for bool {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_bool(*self)?;
 
         Ok(())
@@ -69,7 +69,7 @@ impl<W: WriteStream> Writable<W> for bool {
 }
 
 impl<W: WriteStream> Writable<W> for u8 {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_u8(*self)?;
 
         Ok(())
@@ -77,7 +77,7 @@ impl<W: WriteStream> Writable<W> for u8 {
 }
 
 impl<W: WriteStream> Writable<W> for u16 {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_u16(*self)?;
 
         Ok(())
@@ -85,7 +85,7 @@ impl<W: WriteStream> Writable<W> for u16 {
 }
 
 impl<W: WriteStream> Writable<W> for u32 {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_u32(*self)?;
 
         Ok(())
@@ -93,7 +93,7 @@ impl<W: WriteStream> Writable<W> for u32 {
 }
 
 impl<W: WriteStream> Writable<W> for u64 {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_u64(*self)?;
 
         Ok(())
@@ -101,7 +101,7 @@ impl<W: WriteStream> Writable<W> for u64 {
 }
 
 impl<W: WriteStream> Writable<W> for i8 {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_i8(*self)?;
 
         Ok(())
@@ -109,7 +109,7 @@ impl<W: WriteStream> Writable<W> for i8 {
 }
 
 impl<W: WriteStream> Writable<W> for i16 {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_i16(*self)?;
 
         Ok(())
@@ -117,7 +117,7 @@ impl<W: WriteStream> Writable<W> for i16 {
 }
 
 impl<W: WriteStream> Writable<W> for i32 {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_i32(*self)?;
 
         Ok(())
@@ -125,7 +125,7 @@ impl<W: WriteStream> Writable<W> for i32 {
 }
 
 impl<W: WriteStream> Writable<W> for i64 {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_i64(*self)?;
 
         Ok(())
@@ -133,7 +133,7 @@ impl<W: WriteStream> Writable<W> for i64 {
 }
 
 impl<W: WriteStream> Writable<W> for usize {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_usize(*self)?;
 
         Ok(())
@@ -141,7 +141,7 @@ impl<W: WriteStream> Writable<W> for usize {
 }
 
 impl<W: WriteStream> Writable<W> for isize {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_isize(*self)?;
 
         Ok(())
@@ -149,7 +149,7 @@ impl<W: WriteStream> Writable<W> for isize {
 }
 
 impl<W: WriteStream> Writable<W> for f32 {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_f32(*self)?;
 
         Ok(())
@@ -157,7 +157,7 @@ impl<W: WriteStream> Writable<W> for f32 {
 }
 
 impl<W: WriteStream> Writable<W> for f64 {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_f64(*self)?;
 
         Ok(())
@@ -165,10 +165,10 @@ impl<W: WriteStream> Writable<W> for f64 {
 }
 
 impl<W: WriteStream, T: Writable<W>> Writable<W> for Option<T> {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         if let Some(v) = self {
             stream.write_bool(true)?;
-            v.write(stream)?;
+            v.write_byte(stream)?;
         } else {
             stream.write_bool(false)?;
         }
@@ -177,12 +177,22 @@ impl<W: WriteStream, T: Writable<W>> Writable<W> for Option<T> {
     }
 }
 
+impl<W: WriteStream, T: Writable<W>, const N: usize> Writable<W> for [T; N] {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
+        for el in self.iter() {
+            el.write_byte(stream)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl<W: WriteStream, T: Writable<W>> Writable<W> for &[T] {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_usize(self.len())?;
 
         for el in self.iter() {
-            el.write(stream)?;
+            el.write_byte(stream)?;
         }
 
         Ok(())
@@ -190,11 +200,11 @@ impl<W: WriteStream, T: Writable<W>> Writable<W> for &[T] {
 }
 
 impl<W: WriteStream, T: Writable<W>> Writable<W> for Vec<T> {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         stream.write_usize(self.len())?;
 
         for el in self {
-            el.write(stream)?;
+            el.write_byte(stream)?;
         }
 
         Ok(())
@@ -202,102 +212,170 @@ impl<W: WriteStream, T: Writable<W>> Writable<W> for Vec<T> {
 }
 
 impl<W: WriteStream> Writable<W> for &str {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         let bytes = self.as_bytes();
-        bytes.write(stream)
+        bytes.write_byte(stream)
     }
 }
 
 impl<W: WriteStream> Writable<W> for String {
-    fn write(&self, stream: &mut W) -> Result<(), W::Error> {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
         let bytes = self.as_bytes();
-        bytes.write(stream)
+        bytes.write_byte(stream)
+    }
+}
+
+impl<W: WriteStream> Writable<W> for glam::Vec2 {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
+        self.x.write_byte(stream)?;
+        self.y.write_byte(stream)?;
+
+        Ok(())
+    }
+}
+
+impl<W: WriteStream> Writable<W> for glam::Vec3 {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
+        self.x.write_byte(stream)?;
+        self.y.write_byte(stream)?;
+        self.z.write_byte(stream)?;
+
+        Ok(())
+    }
+}
+
+impl<W: WriteStream> Writable<W> for glam::Vec4 {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
+        self.x.write_byte(stream)?;
+        self.y.write_byte(stream)?;
+        self.z.write_byte(stream)?;
+        self.w.write_byte(stream)?;
+
+        Ok(())
+    }
+}
+
+impl<W: WriteStream> Writable<W> for glam::Mat2 {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
+        self.x_axis.write_byte(stream)?;
+        self.y_axis.write_byte(stream)?;
+
+        Ok(())
+    }
+}
+
+impl<W: WriteStream> Writable<W> for glam::Mat3 {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
+        self.x_axis.write_byte(stream)?;
+        self.y_axis.write_byte(stream)?;
+        self.z_axis.write_byte(stream)?;
+
+        Ok(())
+    }
+}
+
+impl<W: WriteStream> Writable<W> for glam::Mat4 {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
+        self.x_axis.write_byte(stream)?;
+        self.y_axis.write_byte(stream)?;
+        self.z_axis.write_byte(stream)?;
+        self.w_axis.write_byte(stream)?;
+
+        Ok(())
+    }
+}
+
+impl<W: WriteStream> Writable<W> for glam::Quat {
+    fn write_byte(&self, stream: &mut W) -> Result<(), W::Error> {
+        self.to_array().write_byte(stream)?;
+
+        Ok(())
     }
 }
 
 impl<R: ReadStream> Readable<R> for bool {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_bool()
     }
 }
 
 impl<R: ReadStream> Readable<R> for u8 {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_u8()
     }
 }
 
 impl<R: ReadStream> Readable<R> for u16 {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_u16()
     }
 }
 
 impl<R: ReadStream> Readable<R> for u32 {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_u32()
     }
 }
 
 impl<R: ReadStream> Readable<R> for u64 {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_u64()
     }
 }
 
 impl<R: ReadStream> Readable<R> for i8 {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_i8()
     }
 }
 
 impl<R: ReadStream> Readable<R> for i16 {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_i16()
     }
 }
 
 impl<R: ReadStream> Readable<R> for i32 {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_i32()
     }
 }
 
 impl<R: ReadStream> Readable<R> for i64 {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_i64()
     }
 }
 
 impl<R: ReadStream> Readable<R> for usize {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_usize()
     }
 }
 
 impl<R: ReadStream> Readable<R> for isize {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_isize()
     }
 }
 
 impl<R: ReadStream> Readable<R> for f32 {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_f32()
     }
 }
 
 impl<R: ReadStream> Readable<R> for f64 {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         stream.read_f64()
     }
 }
 
 impl<R: ReadStream, T: Readable<R>> Readable<R> for Option<T> {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         let is_some = stream.read_bool()?;
         if is_some {
-            Ok(Some(T::read(stream)?))
+            Ok(Some(T::read_byte(stream)?))
         } else {
             Ok(None)
         }
@@ -305,20 +383,87 @@ impl<R: ReadStream, T: Readable<R>> Readable<R> for Option<T> {
 }
 
 impl<R: ReadStream, T: Readable<R>> Readable<R> for Vec<T> {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
         let len = stream.read_usize()?;
         let mut vec = Vec::with_capacity(len);
         for _ in 0..len {
-            vec.push(T::read(stream)?);
+            vec.push(T::read_byte(stream)?);
         }
         Ok(vec)
     }
 }
 
+impl<R: ReadStream, T: Readable<R>, const N: usize> Readable<R> for [T; N] {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
+        std::array::try_from_fn(|_| T::read_byte(stream))
+    }
+}
+
 impl<R: ReadStream> Readable<R> for String {
-    fn read(stream: &mut R) -> Result<Self, R::Error> {
-        let bytes = Vec::<u8>::read(stream)?;
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
+        let bytes = Vec::<u8>::read_byte(stream)?;
         String::from_utf8(bytes).map_err(|e| e.into())
+    }
+}
+
+impl<R: ReadStream> Readable<R> for glam::Vec2 {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
+        Ok(Self {
+            x: f32::read_byte(stream)?,
+            y: f32::read_byte(stream)?,
+        })
+    }
+}
+
+impl<R: ReadStream> Readable<R> for glam::Vec3 {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
+        Ok(Self {
+            x: f32::read_byte(stream)?,
+            y: f32::read_byte(stream)?,
+            z: f32::read_byte(stream)?,
+        })
+    }
+}
+
+impl<R: ReadStream> Readable<R> for glam::Vec4 {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
+        let array = <_>::read_byte(stream)?;
+        Ok(Self::from_array(array))
+    }
+}
+
+impl<R: ReadStream> Readable<R> for glam::Mat2 {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
+        let array = <_>::read_byte(stream)?;
+        Ok(Self::from_cols_array(&array))
+    }
+}
+
+impl<R: ReadStream> Readable<R> for glam::Mat3 {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
+        Ok(Self {
+            x_axis: glam::Vec3::read_byte(stream)?,
+            y_axis: glam::Vec3::read_byte(stream)?,
+            z_axis: glam::Vec3::read_byte(stream)?,
+        })
+    }
+}
+
+impl<R: ReadStream> Readable<R> for glam::Mat4 {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
+        Ok(Self {
+            x_axis: glam::Vec4::read_byte(stream)?,
+            y_axis: glam::Vec4::read_byte(stream)?,
+            z_axis: glam::Vec4::read_byte(stream)?,
+            w_axis: glam::Vec4::read_byte(stream)?,
+        })
+    }
+}
+
+impl<R: ReadStream> Readable<R> for glam::Quat {
+    fn read_byte(stream: &mut R) -> Result<Self, R::Error> {
+        let array = <_>::read_byte(stream)?;
+        Ok(Self::from_array(array))
     }
 }
 

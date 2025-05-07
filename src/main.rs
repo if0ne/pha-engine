@@ -1,6 +1,9 @@
+#![feature(array_try_from_fn)]
+
 mod io;
 mod linking_context;
 mod net;
+mod utils;
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -56,28 +59,30 @@ impl Default for RoboCat {
 }
 
 impl Writable<OutputMemoryStream<'_, '_, LinkingContext>> for RoboCat {
-    fn write(
+    fn write_byte(
         &self,
         stream: &mut OutputMemoryStream<'_, '_, LinkingContext>,
     ) -> Result<(), GameIoError> {
         self.health.write_bits(stream, 8)?;
         self.meow_count.write_bits(stream, 8)?;
-        self.mice_indices.write(stream)?;
-        self.name.write(stream)?;
-        self.home.write(stream)?;
+        self.mice_indices.write_byte(stream)?;
+        self.name.write_byte(stream)?;
+        self.home.write_byte(stream)?;
 
         Ok(())
     }
 }
 
 impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for RoboCat {
-    fn read(stream: &mut InputMemoryStream<'_, '_, LinkingContext>) -> Result<Self, GameIoError> {
+    fn read_byte(
+        stream: &mut InputMemoryStream<'_, '_, LinkingContext>,
+    ) -> Result<Self, GameIoError> {
         Ok(Self {
             health: stream.read_u32_bits(8)?,
             meow_count: stream.read_u32_bits(8)?,
-            mice_indices: Vec::<u32>::read(stream)?,
-            name: String::read(stream)?,
-            home: Option::<Weak<dyn GameObject>>::read(stream)?,
+            mice_indices: <_>::read_byte(stream)?,
+            name: <_>::read_byte(stream)?,
+            home: <_>::read_byte(stream)?,
         })
     }
 }
@@ -110,7 +115,7 @@ fn main() {
 
         rcv.recv().unwrap();
 
-        cat.write(&mut output).unwrap();
+        cat.write_byte(&mut output).unwrap();
         stream.write(&buf).unwrap();
         stream.flush().unwrap();
     });
@@ -126,7 +131,7 @@ fn main() {
     let mut ctx = ctx.lock().unwrap();
     let mut input = InputMemoryStream::new(&recv, &mut *ctx);
 
-    let cat = RoboCat::read(&mut input).unwrap();
+    let cat = RoboCat::read_byte(&mut input).unwrap();
 
     dbg!(cat);
 }
