@@ -5,12 +5,12 @@ use std::{
 
 use crate::{
     GameObject,
-    io::bytes::{Readable, Writable},
+    io::bytes::{ReadStream, Readable, Writable},
     linking_context::LinkingContext,
     reflect::Reflect,
 };
 
-use super::io::{InputMemoryStream, OutputMemoryStream};
+use super::io::{GameIoError, InputMemoryStream, OutputMemoryStream};
 
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
@@ -37,14 +37,12 @@ impl ObjectRegistry {
 }
 
 pub struct ReplicationManager {
-    linking_ctx: Arc<Mutex<LinkingContext>>,
     objects_to_me: HashSet<usize>,
 }
 
 impl ReplicationManager {
-    pub fn new(linking_ctx: Arc<Mutex<LinkingContext>>) -> Self {
+    pub fn new() -> Self {
         Self {
-            linking_ctx,
             objects_to_me: Default::default(),
         }
     }
@@ -108,5 +106,100 @@ impl ReplicationManager {
             let go = self.recv_replicated_object(input, registry);
             set.insert(go);
         }
+
+        for go in &self.objects_to_me {
+            if !set.contains(go) {
+                input.ctx.remove_game_object(*go);
+            }
+        }
+
+        self.objects_to_me = set;
+    }
+
+    pub fn replicate_create(
+        &mut self,
+        stream: &mut OutputMemoryStream<'_, '_, LinkingContext>,
+        go: &Arc<dyn GameObject>,
+    ) {
+        let header = ReplicationHeader {
+            action: ReplicationAction::Create,
+            network_id: stream.ctx.get_network_id(go, false).unwrap(),
+            class_id: go.class_id(),
+        };
+        header.write_byte(stream).unwrap();
+        /* todo() */
+    }
+
+    pub fn replicate_update(
+        &mut self,
+        stream: &mut OutputMemoryStream<'_, '_, LinkingContext>,
+        go: &Arc<dyn GameObject>,
+    ) {
+        let header = ReplicationHeader {
+            action: ReplicationAction::Update,
+            network_id: stream.ctx.get_network_id(go, false).unwrap(),
+            class_id: go.class_id(),
+        };
+        header.write_byte(stream).unwrap();
+        /* todo() */
+    }
+
+    pub fn replicate_destroy(
+        &mut self,
+        stream: &mut OutputMemoryStream<'_, '_, LinkingContext>,
+        go: &Arc<dyn GameObject>,
+    ) {
+        let header = ReplicationHeader {
+            action: ReplicationAction::Destroy,
+            network_id: stream.ctx.get_network_id(go, false).unwrap(),
+            class_id: go.class_id(),
+        };
+        header.write_byte(stream).unwrap();
+    }
+
+    fn process_replication_action(
+        &mut self,
+        stream: &mut InputMemoryStream<'_, '_, LinkingContext>,
+    ) {
+        todo!()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+#[repr(u8)]
+pub enum ReplicationAction {
+    Create,
+    Update,
+    Destroy,
+}
+
+pub struct ReplicationHeader {
+    pub action: ReplicationAction,
+    pub network_id: usize,
+    pub class_id: u32,
+}
+
+impl Writable<OutputMemoryStream<'_, '_, LinkingContext>> for ReplicationHeader {
+    fn write_byte(
+        &self,
+        stream: &mut OutputMemoryStream<'_, '_, LinkingContext>,
+    ) -> Result<(), GameIoError> {
+        (self.action as u8).write_byte(stream)?;
+        self.network_id.write_byte(stream)?;
+        self.class_id.write_byte(stream)?;
+
+        Ok(())
+    }
+}
+
+impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for ReplicationHeader {
+    fn read_byte(
+        stream: &mut InputMemoryStream<'_, '_, LinkingContext>,
+    ) -> Result<Self, GameIoError> {
+        Ok(Self {
+            action: unsafe { std::mem::transmute(stream.read_u8()?) },
+            network_id: stream.read_usize()?,
+            class_id: stream.read_u32()?,
+        })
     }
 }

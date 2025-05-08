@@ -45,10 +45,9 @@ impl LinkingContext {
         self.id_to_go.insert(id, go);
     }
 
-    pub fn remove_game_object(&mut self, go: Arc<dyn GameObject>) {
-        let id = self.go_to_id.get(&go.id()).cloned().unwrap();
+    pub fn remove_game_object(&mut self, go: usize) {
+        let id = self.go_to_id.remove(&go).unwrap();
         self.id_to_go.remove(&id);
-        self.go_to_id.remove(&go.id());
     }
 }
 
