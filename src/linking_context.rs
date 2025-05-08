@@ -23,10 +23,7 @@ impl LinkingContext {
         go: &Arc<dyn GameObject>,
         should_create: bool,
     ) -> Option<usize> {
-        let data_ptr: *const dyn GameObject = &**go;
-        let thin_ptr = data_ptr as *const () as usize;
-
-        match self.go_to_id.entry(thin_ptr) {
+        match self.go_to_id.entry(go.id()) {
             Entry::Occupied(occupied_entry) => Some(*occupied_entry.get()),
             Entry::Vacant(vacant_entry) if should_create => {
                 let id = self.next_id;
@@ -44,20 +41,14 @@ impl LinkingContext {
     }
 
     pub fn insert_game_object(&mut self, go: Arc<dyn GameObject>, id: usize) {
-        let data_ptr: *const dyn GameObject = &*go;
-        let thin_ptr = data_ptr as *const () as usize;
-
+        self.go_to_id.insert(go.id(), id);
         self.id_to_go.insert(id, go);
-        self.go_to_id.insert(thin_ptr, id);
     }
 
     pub fn remove_game_object(&mut self, go: Arc<dyn GameObject>) {
-        let data_ptr: *const dyn GameObject = &*go;
-        let thin_ptr = data_ptr as *const () as usize;
-
-        let id = self.go_to_id.get(&thin_ptr).cloned().unwrap();
+        let id = self.go_to_id.get(&go.id()).cloned().unwrap();
         self.id_to_go.remove(&id);
-        self.go_to_id.remove(&thin_ptr);
+        self.go_to_id.remove(&go.id());
     }
 }
 
@@ -78,7 +69,7 @@ impl Writable<OutputMemoryStream<'_, '_, LinkingContext>> for Arc<dyn GameObject
         let id = stream
             .ctx
             .get_network_id(self, false)
-            .ok_or(GameIoError::UnregisteredGameObject)?;
+            .ok_or(GameIoError::UnregisteredGameObject(0))?;
         stream.write_usize(id)?;
 
         Ok(())
@@ -89,10 +80,11 @@ impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for Arc<dyn GameObject>
     fn read_byte(
         stream: &mut InputMemoryStream<'_, '_, LinkingContext>,
     ) -> Result<Self, GameIoError> {
+        let id = stream.read_usize()?;
         let go = stream
             .ctx
-            .get_game_object(stream.read_usize()?)
-            .ok_or(GameIoError::UnregisteredGameObject)?;
+            .get_game_object(id)
+            .ok_or(GameIoError::UnregisteredGameObject(id))?;
 
         Ok(go)
     }
@@ -106,10 +98,11 @@ impl Readable<InputMemoryStream<'_, '_, LinkingContext>> for Option<Weak<dyn Gam
             return Ok(None);
         }
 
+        let id = stream.read_usize()?;
         let go = stream
             .ctx
-            .get_game_object(stream.read_usize()?)
-            .ok_or(GameIoError::UnregisteredGameObject)?;
+            .get_game_object(id)
+            .ok_or(GameIoError::UnregisteredGameObject(id))?;
 
         Ok(Some(Arc::downgrade(&go)))
     }

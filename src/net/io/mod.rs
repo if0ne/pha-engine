@@ -6,7 +6,7 @@ use std::string::FromUtf8Error;
 #[derive(Debug, Clone)]
 pub enum GameIoError {
     Utf8Error(FromUtf8Error),
-    UnregisteredGameObject,
+    UnregisteredGameObject(usize),
     UnexpectedEof(usize, usize),
     Oom,
 }
@@ -35,7 +35,7 @@ impl<'ctx, 'buffer, T> OutputMemoryStream<'ctx, 'buffer, T> {
 }
 
 pub struct InputMemoryStream<'ctx, 'buffer, T> {
-    pub ctx: &'ctx T,
+    pub ctx: &'ctx mut T,
 
     buffer: &'buffer [u8],
     head: usize,
@@ -48,5 +48,9 @@ impl<'ctx, 'buffer, T> InputMemoryStream<'ctx, 'buffer, T> {
             head: 0,
             ctx,
         }
+    }
+
+    pub fn remaining_bit_count(&self) -> usize {
+        self.buffer.len() * 8 - self.head
     }
 }

@@ -31,4 +31,6 @@ impl UserDefinedType {
 
 pub trait Reflect {
     fn reflect(&self) -> &'static UserDefinedType;
+    fn type_id() -> u32;
+    fn create_instance() -> Self;
 }

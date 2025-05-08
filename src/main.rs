@@ -9,8 +9,9 @@ mod utils;
 use std::io::{Read, Write};
 use std::mem::offset_of;
 use std::net::TcpListener;
+use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex};
 use std::{fmt::Debug, net::TcpStream};
 
 use io::bytes::{Readable, Writable};
@@ -18,43 +19,38 @@ use linking_context::LinkingContext;
 use net::io::{InputMemoryStream, OutputMemoryStream};
 use reflect::{MemberField, Reflect, Ty, UserDefinedType};
 
-pub trait GameObject: Sync + Send + Debug {}
+pub trait GameObject: Sync + Send + Debug {
+    fn id(&self) -> usize;
+    fn class_id(&self) -> u32;
+}
 
 #[derive(Debug)]
 pub struct RoboCat {
+    id: usize,
     health: u32,
     meow_count: u32,
-    home: Option<Weak<dyn GameObject>>,
     name: String,
-    mice_indices: Vec<u32>,
 }
 
-#[derive(Debug)]
-pub struct Home {
-    name: String,
-    cats: Vec<Arc<dyn GameObject>>,
-}
+pub static ID: AtomicUsize = AtomicUsize::new(0);
 
-impl Default for Home {
-    fn default() -> Self {
-        Home {
-            name: "Catsville".to_string(),
-            cats: Default::default(),
-        }
+impl GameObject for RoboCat {
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn class_id(&self) -> u32 {
+        Self::type_id()
     }
 }
-
-impl GameObject for Home {}
-impl GameObject for RoboCat {}
 
 impl Default for RoboCat {
     fn default() -> Self {
         Self {
+            id: ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             health: 10,
             meow_count: 3,
-            home: None,
             name: Default::default(),
-            mice_indices: Default::default(),
         }
     }
 }
@@ -69,23 +65,21 @@ impl Reflect for RoboCat {
 
         INFO
     }
+
+    fn type_id() -> u32 {
+        1
+    }
+
+    fn create_instance() -> Self {
+        Default::default()
+    }
 }
 
 fn main() {
     let ctx = Arc::new(Mutex::new(LinkingContext::default()));
 
-    let home: Arc<dyn GameObject> = Arc::new(Home {
-        name: "My Home".to_string(),
-        cats: vec![],
-    });
-
     let mut cat = RoboCat::default();
     cat.name = "Eminem".to_string();
-    cat.mice_indices.push(4);
-    cat.mice_indices.push(2);
-    cat.home = Some(Arc::downgrade(&home));
-
-    ctx.lock().unwrap().get_network_id(&home, true);
 
     let listener = TcpListener::bind("127.0.0.1:55555").unwrap();
     let (sdr, rcv) = channel();
